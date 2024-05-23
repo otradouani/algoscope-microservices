@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Mask Loader</title>
+  <style>
+    .image-container {
+      display: flex;
+      flex-wrap: wrap;
+    }
+
+    .image-wrapper {
+      margin: 10px;
+      text-align: center;
+    }
+
+    .image-wrapper img,
+    .image-wrapper canvas {
+      max-width: 200px;
+      display: block;
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Load Images and Display Masks</h1>
+  <input type="file" id="imageInput" multiple>
+  <button onclick="uploadImages()">Upload Images</button>
+  <div class="image-container" id="imageContainer"></div>
+
+  <script>
+    async function uploadImages() {
+      const input = document.getElementById('imageInput');
+      const files = input.files;
+      if (files.length === 0) {
+        alert('Please select some images to upload.');
+        return;
+      }
+
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append('images', files[i]);
+      }
+
+      try {
+        const uploadResponse = await fetch('http://localhost:8000/upload-images', {
+          method: 'POST',
+          body: formData
+        });
+        const uploadResult = await uploadResponse.json();
+
+        if (uploadResponse.ok) {
+          displayImagesAndMasks(uploadResult.imagePaths);
+        } else {
+          alert(uploadResult.message);
+        }
+      } catch (error) {
+        console.error('Error uploading images:', error);
+        alert('An error occurred while uploading images.');
+      }
+    }
+
+    async function displayImagesAndMasks(imagePaths) {
+      const response = await fetch('http://localhost:8000/get-masks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ imagePaths })
+      });
+      const masks = await response.json();
+
+      const imageContainer = document.getElementById('imageContainer');
+      imageContainer.innerHTML = '';
+
+      masks.forEach(({ imagePath, mask }) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'image-wrapper';
+
+        const image = document.createElement('img');
+        image.onload = () => {
+          const maskCanvas = document.createElement('canvas');
+          maskCanvas.width = image.width;
+          maskCanvas.height = image.height;
+          drawPolygon(maskCanvas, mask);
+          wrapper.appendChild(maskCanvas);
+        };
+        image.src = 'http://localhost:8000' + imagePath; // Ensure this path is accessible
+        wrapper.appendChild(image);
+
+        imageContainer.appendChild(wrapper);
+      });
+    }
+
+    function drawPolygon(canvas, points) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+      }
+
+      ctx.closePath();
+      ctx.strokeStyle = 'red';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  </script>
+</body>
+
+</html>
